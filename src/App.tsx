@@ -1,27 +1,46 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { TopBar } from "@/components/TopBar";
+import { SortableGrid } from "@/components/SortableGrid";
+import { Lightbox } from "@/components/Lightbox";
+import { ExportDialog } from "@/components/ExportDialog";
+import { Sidebar } from "@/components/Sidebar";
+import { ScanProgress } from "@/components/ScanProgress";
+import { EmptyState } from "@/components/EmptyState";
+import { useProjectStore } from "@/stores/projectStore";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { toast } from "sonner";
 
 function App() {
+  const folder = useProjectStore((s) => s.folder);
+  const scanning = useProjectStore((s) => s.scanning);
+  const darkMode = useProjectStore((s) => s.darkMode);
+  const [exportOpen, setExportOpen] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+  }, [darkMode]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Pickr</CardTitle>
-          <CardDescription>
-            Curate the best from a folder of photos and videos
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center gap-4">
-          <p className="text-sm text-muted-foreground">WIP scaffold</p>
-          <Button onClick={() => toast("Toast works!")}>
-            Test Toast
-          </Button>
-        </CardContent>
-      </Card>
-      <Toaster />
-    </div>
+    <TooltipProvider delay={400}>
+      <div className="flex h-screen flex-col bg-background text-foreground">
+        <TopBar onExport={() => setExportOpen(true)} />
+        <div className="flex flex-1 overflow-hidden">
+          <main className="flex-1 overflow-auto">
+            {scanning ? (
+              <ScanProgress />
+            ) : folder ? (
+              <SortableGrid />
+            ) : (
+              <EmptyState />
+            )}
+          </main>
+          <Sidebar />
+        </div>
+        <Lightbox />
+        <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
+        <Toaster theme={darkMode ? "dark" : "light"} position="bottom-right" />
+      </div>
+    </TooltipProvider>
   );
 }
 
