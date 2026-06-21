@@ -1,9 +1,18 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Eye, EyeOff, PlayCircle, Users, Copy } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  PlayCircle,
+  Users,
+  Layers,
+  Star,
+  Image as ImageIcon,
+} from "lucide-react";
 import type { ManifestItem } from "@/lib/types";
 import { useProjectStore } from "@/stores/projectStore";
 import { assetUrl, cn } from "@/lib/utils";
+import { getDupGroupInfo } from "@/features/filters/dupHelpers";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -27,6 +36,9 @@ export function Thumbnail({ item, index }: ThumbnailProps) {
   const lightboxIndex = useProjectStore((s) => s.lightboxIndex);
   const toggleInclude = useProjectStore((s) => s.toggleInclude);
   const setLightboxIndex = useProjectStore((s) => s.setLightboxIndex);
+  const allItems = useProjectStore((s) => s.items);
+
+  const dup = getDupGroupInfo(item, allItems);
 
   const {
     attributes,
@@ -51,7 +63,10 @@ export function Thumbnail({ item, index }: ThumbnailProps) {
         render={
           <div
             ref={setNodeRef}
-            style={style}
+            style={{
+              ...style,
+              ...(dup ? { borderLeft: `3px solid ${dup.groupColor}` } : {}),
+            }}
             {...attributes}
             {...listeners}
             onClick={() => setLightboxIndex(index)}
@@ -64,13 +79,19 @@ export function Thumbnail({ item, index }: ThumbnailProps) {
           />
         }
       >
-        <img
-          src={assetUrl(item.thumb_path)}
-          alt={item.filename}
-          draggable={false}
-          loading="lazy"
-          className="h-full w-full object-cover select-none"
-        />
+        {item.thumb_path ? (
+          <img
+            src={assetUrl(item.thumb_path)}
+            alt={item.filename}
+            draggable={false}
+            loading="lazy"
+            className="h-full w-full object-cover select-none"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
+            <ImageIcon className="h-8 w-8" />
+          </div>
+        )}
 
         {item.kind === "video" && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -111,9 +132,17 @@ export function Thumbnail({ item, index }: ThumbnailProps) {
               {item.face_count}
             </Badge>
           )}
-          {item.dup_group !== null && (
-            <Badge className="border-none bg-black/55 px-1.5 py-0 text-[10px] text-white">
-              <Copy className="h-2.5 w-2.5" />
+          {dup && (
+            <Badge
+              className="border-none px-1.5 py-0 text-[10px] text-white"
+              style={{ backgroundColor: `${dup.groupColor}cc` }}
+            >
+              {dup.isBestInGroup ? (
+                <Star className="mr-0.5 h-2.5 w-2.5 fill-current" />
+              ) : (
+                <Layers className="mr-0.5 h-2.5 w-2.5" />
+              )}
+              {dup.groupSize}
             </Badge>
           )}
         </div>

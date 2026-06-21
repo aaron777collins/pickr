@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { useProjectStore } from "@/stores/projectStore";
+import { applyFilters, useFiltersStore } from "@/stores/filtersStore";
+import { useIdentitiesStore } from "@/stores/identitiesStore";
 import type { ManifestItem } from "./types";
 
 export function useOrderedItems(): ManifestItem[] {
@@ -20,11 +22,38 @@ export function useOrderedItems(): ManifestItem[] {
 }
 
 export function useVisibleItems(): ManifestItem[] {
-  const ordered = useOrderedItems();
+  const items = useProjectStore((s) => s.items);
+  const order = useProjectStore((s) => s.order);
+  const included = useProjectStore((s) => s.included);
   const searchQuery = useProjectStore((s) => s.searchQuery);
-  return useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return ordered;
-    return ordered.filter((i) => i.filename.toLowerCase().includes(q));
-  }, [ordered, searchQuery]);
+  const sharpOnly = useFiltersStore((s) => s.sharpOnly);
+  const hasPeople = useFiltersStore((s) => s.hasPeople);
+  const hideDuplicates = useFiltersStore((s) => s.hideDuplicates);
+  const skippedOnly = useFiltersStore((s) => s.skippedOnly);
+  const personFilter = useFiltersStore((s) => s.personFilter);
+  const identities = useIdentitiesStore((s) => s.identities);
+
+  return useMemo(
+    () =>
+      applyFilters(
+        items,
+        order,
+        included,
+        { sharpOnly, hasPeople, hideDuplicates, skippedOnly, personFilter },
+        identities,
+        searchQuery
+      ),
+    [
+      items,
+      order,
+      included,
+      sharpOnly,
+      hasPeople,
+      hideDuplicates,
+      skippedOnly,
+      personFilter,
+      identities,
+      searchQuery,
+    ]
+  );
 }

@@ -1,12 +1,14 @@
-import { useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, X, Eye, EyeOff } from "lucide-react";
+import { useEffect, useCallback, useState } from "react";
+import { ChevronLeft, ChevronRight, X, Eye, EyeOff, ScanFace } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { useVisibleItems } from "@/lib/useOrderedItems";
 import { assetUrl, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { FaceTagModal } from "@/features/face-tag/FaceTagModal";
 
 export function Lightbox() {
   const items = useVisibleItems();
+  const [tagging, setTagging] = useState(false);
   const lightboxIndex = useProjectStore((s) => s.lightboxIndex);
   const setLightboxIndex = useProjectStore((s) => s.setLightboxIndex);
   const toggleInclude = useProjectStore((s) => s.toggleInclude);
@@ -34,7 +36,7 @@ export function Lightbox() {
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || tagging) return;
     function onKey(e: KeyboardEvent) {
       switch (e.key) {
         case "Escape":
@@ -50,18 +52,30 @@ export function Lightbox() {
           e.preventDefault();
           if (item) toggleInclude(item.path);
           break;
+        case "f":
+        case "F":
+          e.preventDefault();
+          if (item && item.kind === "image") setTagging(true);
+          break;
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, close, go, item, toggleInclude]);
+  }, [open, tagging, close, go, item, toggleInclude]);
+
+  // Reset the tagging modal whenever the lightbox closes or the item changes.
+  useEffect(() => {
+    setTagging(false);
+  }, [item?.path, open]);
 
   if (!open || !item) return null;
 
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col bg-black/95"
-      onClick={close}
+      onClick={() => {
+        if (!tagging) close();
+      }}
     >
       <Button
         variant="ghost"
@@ -138,26 +152,48 @@ export function Lightbox() {
             {` · ${lightboxIndex! + 1}/${items.length}`}
           </span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => toggleInclude(item.path)}
-          className={cn(
-            "border-white/20 bg-transparent text-white hover:bg-white/15 hover:text-white",
-            !included && "border-red-500/60 text-red-300"
+        <div className="flex items-center gap-2">
+          {item.kind === "image" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTagging(true)}
+              className="border-white/20 bg-transparent text-white hover:bg-white/15 hover:text-white"
+            >
+              <ScanFace className="mr-1.5 h-4 w-4" /> Tag People
+              <kbd className="ml-1.5 rounded bg-white/15 px-1 text-[10px]">F</kbd>
+            </Button>
           )}
-        >
-          {included ? (
-            <>
-              <Eye className="mr-1.5 h-4 w-4" /> Included
-            </>
-          ) : (
-            <>
-              <EyeOff className="mr-1.5 h-4 w-4" /> Skipped
-            </>
-          )}
-        </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toggleInclude(item.path)}
+            className={cn(
+              "border-white/20 bg-transparent text-white hover:bg-white/15 hover:text-white",
+              !included && "border-red-500/60 text-red-300"
+            )}
+          >
+            {included ? (
+              <>
+                <Eye className="mr-1.5 h-4 w-4" /> Included
+              </>
+            ) : (
+              <>
+                <EyeOff className="mr-1.5 h-4 w-4" /> Skipped
+              </>
+            )}
+          </Button>
+        </div>
       </div>
+
+      {tagging && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <FaceTagModal
+            imagePath={item.path}
+            onClose={() => setTagging(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }

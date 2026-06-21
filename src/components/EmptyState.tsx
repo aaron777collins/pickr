@@ -1,9 +1,9 @@
 import { FolderOpen } from "lucide-react";
-import { useFolderActions } from "@/lib/useFolderActions";
+import { useOpenFolder } from "@/lib/folderContext";
 import { Button } from "@/components/ui/button";
 
 export function EmptyState() {
-  const { openFolder } = useFolderActions();
+  const openFolder = useOpenFolder();
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">

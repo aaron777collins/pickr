@@ -1,23 +1,27 @@
 import { Camera, Search, Moon, Sun, FolderOpen, Download } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
-import { useFolderActions } from "@/lib/useFolderActions";
+import { useOpenFolder } from "@/lib/folderContext";
 import { openInExplorer } from "@/lib/commands";
 import { truncatePath } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SaveIndicator } from "@/components/SaveIndicator";
+import type { SaveStatus } from "@/features/persistence/usePersistence";
 
 interface TopBarProps {
   onExport: () => void;
+  saveStatus: SaveStatus;
+  lastSaved: number | null;
 }
 
-export function TopBar({ onExport }: TopBarProps) {
+export function TopBar({ onExport, saveStatus, lastSaved }: TopBarProps) {
   const folder = useProjectStore((s) => s.folder);
   const darkMode = useProjectStore((s) => s.darkMode);
   const toggleDarkMode = useProjectStore((s) => s.toggleDarkMode);
   const searchQuery = useProjectStore((s) => s.searchQuery);
   const setSearchQuery = useProjectStore((s) => s.setSearchQuery);
   const items = useProjectStore((s) => s.items);
-  const { openFolder } = useFolderActions();
+  const openFolder = useOpenFolder();
 
   return (
     <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-card px-4">
@@ -48,6 +52,11 @@ export function TopBar({ onExport }: TopBarProps) {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        <SaveIndicator
+          status={saveStatus}
+          lastSaved={lastSaved}
+          className="mr-1"
+        />
         <Button
           variant="ghost"
           size="icon-sm"
