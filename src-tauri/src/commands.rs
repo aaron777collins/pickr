@@ -21,8 +21,8 @@ pub struct ManifestItem {
     pub duration_sec: Option<f64>,
     pub sharpness: u32,
     pub face_count: u32,
-    pub phash: String,
-    pub thumb_path: String,
+    pub phash: Option<String>,
+    pub thumb_path: Option<String>,
     pub dup_group: Option<u32>,
 }
 
@@ -239,9 +239,7 @@ pub async fn scan_folder(path: String, app: AppHandle) -> Result<Vec<ManifestIte
             serde_json::from_str(line).map_err(|e| format!("invalid JSON from sidecar: {e}"))?;
         match msg.get("type").and_then(|v| v.as_str()) {
             Some("progress") => {
-                if let Ok(progress) = serde_json::from_value::<ScanProgress>(
-                    msg.get("data").cloned().unwrap_or(serde_json::Value::Null),
-                ) {
+                if let Ok(progress) = serde_json::from_value::<ScanProgress>(msg.clone()) {
                     let _ = app.emit("scan-progress", progress);
                 }
             }

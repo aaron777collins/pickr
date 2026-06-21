@@ -97,13 +97,22 @@ export function FaceTagModal({ imagePath, onClose }: FaceTagModalProps) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Detection coords are normalized [0,1] relative to the natural image.
-  const scaleBox = (box: FaceBox) => ({
-    left: box.x * imgSize.w,
-    top: box.y * imgSize.h,
-    width: box.w * imgSize.w,
-    height: box.h * imgSize.h,
-  });
+  // Detection coords are absolute pixels in the natural image; scale them to
+  // the rendered (object-contain) size.
+  const scaleBox = (box: FaceBox) => {
+    const img = imgRef.current;
+    if (!img || !img.naturalWidth || !img.naturalHeight) {
+      return { left: 0, top: 0, width: 0, height: 0 };
+    }
+    const scaleX = imgSize.w / img.naturalWidth;
+    const scaleY = imgSize.h / img.naturalHeight;
+    return {
+      left: box.x * scaleX,
+      top: box.y * scaleY,
+      width: box.w * scaleX,
+      height: box.h * scaleY,
+    };
+  };
 
   function commitName(index: number) {
     const name = nameInput.trim();

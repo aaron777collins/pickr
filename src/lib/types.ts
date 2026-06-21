@@ -7,8 +7,8 @@ export interface ManifestItem {
   duration_sec: number | null;
   sharpness: number;
   face_count: number;
-  phash: string;
-  thumb_path: string;
+  phash: string | null;
+  thumb_path: string | null;
   dup_group: number | null;
 }
 
