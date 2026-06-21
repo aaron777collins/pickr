@@ -9,12 +9,14 @@
 ## Directory Layout
 ```
 src/              # React frontend
-src/components/   # UI components
-src/components/ui/# shadcn primitives
-src/lib/          # utilities
-src-tauri/        # Rust backend (Tauri commands)
-sidecar/          # Python CLI (not yet created)
-docs/             # Architecture docs
+src/components/   # UI components (TopBar, Grid, Lightbox, etc.)
+src/components/ui/# shadcn primitives (Base UI-based)
+src/stores/       # zustand stores (project, filters, identities)
+src/features/     # feature modules (filters, face-tag, persistence)
+src/lib/          # types, command wrappers, utilities
+src-tauri/        # Rust backend (Tauri commands, sidecar spawning)
+sidecar/          # Python CLI (scan, dedup, face_detect, face_match)
+docs/             # Architecture docs + usage guide
 ```
 
 ## Run Commands
@@ -24,11 +26,27 @@ npm run tauri dev    # Full desktop app (first run compiles Rust)
 npm run build        # Production build (frontend)
 ```
 
+## Sidecar (Python)
+```bash
+cd sidecar && source .venv/bin/activate
+pickr-sidecar scan <folder>          # scan + thumbnails + AI analysis
+pickr-sidecar dedup <manifest.json>  # group by pHash similarity
+pickr-sidecar face_detect <path>     # detect faces + embeddings
+pickr-sidecar face_match <emb> <manifest.json>  # find matching faces
+```
+- Output: newline-delimited JSON on stdout (type: progress/result/error)
+- Logs go to stderr only
+- Sidecar binary found by: $PICKR_SIDECAR_PATH > PATH > sidecar/.venv/bin/pickr-sidecar
+- face_recognition requires dlib (cmake + build-essential); degrades gracefully if absent
+
 ## Key Decisions
 - Path alias: `@/` maps to `src/`
-- shadcn components in `src/components/ui/`
+- shadcn components use Base UI (not Radix) — `@base-ui/react`
 - Tauri 2 capability-based permissions in `src-tauri/capabilities/`
-- Python sidecar communicates via JSON over stdin/stdout
+- Python sidecar communicates via newline-delimited JSON over stdout
+- Face coordinates from sidecar are absolute pixels (not normalized)
+- phash and thumb_path can be null (Optional in Rust, string|null in TS)
+- FolderContext provides openFolder to avoid prop drilling
 
 ## Filters, Faces & Persistence (src/stores, src/features)
 
