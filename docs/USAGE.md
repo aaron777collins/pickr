@@ -51,18 +51,32 @@ clean, renamed set.
 
 ## Keyboard shortcuts
 
-| Key       | Action                          |
-|-----------|---------------------------------|
-| Click     | Open lightbox                   |
-| Arrows    | Previous / next in lightbox     |
-| `F`       | Tag faces in the lightbox       |
-| Drag      | Reorder thumbnails              |
+Press `?` at any time to see the full shortcut list.
+
+| Key       | Context   | Action                          |
+|-----------|-----------|----------------------------------|
+| `?`       | Global    | Show keyboard shortcuts          |
+| `D`       | Global    | Toggle dark mode                 |
+| Click     | Grid      | Open lightbox                    |
+| Drag      | Grid      | Reorder thumbnails               |
+| `Esc`     | Lightbox  | Close lightbox                   |
+| `←` `→`   | Lightbox  | Previous / next item             |
+| `Space`   | Lightbox  | Toggle include / skip            |
+| `F`       | Lightbox  | Tag faces                        |
+
+## Batch operations
+
+Use the **Include All** / **Skip All** buttons in the stats bar to batch-toggle
+all currently visible items. When filters are active, these only affect the
+filtered set.
 
 ## Where your work is stored
 
 Everything is saved under `<your folder>/.pickr/`:
 - `manifest.json` — the scan results (sharpness, faces, duplicates).
 - `project.json` — your order, include/skip choices, and named people.
+- `thumbs/` — generated thumbnails.
+- `cache.json` — mtime cache for fast re-scans.
 
 These travel with the folder, so the same curation appears on any machine that
 opens it.

@@ -18,6 +18,8 @@ interface ProjectState {
   setOrder: (order: string[]) => void;
   setIdentities: (identities: Identity[]) => void;
   toggleInclude: (path: string) => void;
+  includeAll: (paths: string[]) => void;
+  skipAll: (paths: string[]) => void;
   setLightboxIndex: (index: number | null) => void;
   setScanning: (scanning: boolean) => void;
   setScanProgress: (progress: ScanProgress | null) => void;
@@ -55,6 +57,22 @@ export const useProjectStore = create<ProjectState>((set) => ({
   toggleInclude: (path) =>
     set((state) => ({
       included: { ...state.included, [path]: !(state.included[path] ?? true) },
+    })),
+
+  includeAll: (paths) =>
+    set((state) => ({
+      included: {
+        ...state.included,
+        ...Object.fromEntries(paths.map((p) => [p, true])),
+      },
+    })),
+
+  skipAll: (paths) =>
+    set((state) => ({
+      included: {
+        ...state.included,
+        ...Object.fromEntries(paths.map((p) => [p, false])),
+      },
     })),
 
   setLightboxIndex: (index) => set({ lightboxIndex: index }),

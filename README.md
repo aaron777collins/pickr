@@ -11,15 +11,20 @@ Pick the best shots from a folder of photos and videos, reorder them by dragging
 - **Drag-and-drop reorder** via dnd-kit
 - **Fullscreen lightbox** for photos (zoom/pan) and videos (HTML5 controls)
 - **Include / Skip toggle** per item (Space in lightbox, eye icon on thumbnails)
+- **Batch operations** -- Include All / Skip All for visible items
 - **AI badges** on every thumbnail:
   - Sharpness score (1-10, color-coded green/amber/red)
   - Face count
-  - Duplicate group indicator (pHash-based)
+  - Duplicate group indicator (pHash-based, auto-detected during scan)
 - **Smart filters** -- Sharp only, Has faces, Hide duplicates, Skipped only
 - **Face recognition** -- detect faces, tag with names, find the same person across all photos
 - **Export** -- copy selected items to a folder with numbered prefixes (01_, 02_, ...)
-- **Auto-save** -- project state (order, selections, face tags) saved to `.pickr.json`
+- **Auto-save** -- project state (order, selections, face tags) saved to `.pickr/project.json`
+- **Stats bar** -- live count of total, included, skipped, and filtered items
+- **Keyboard shortcuts** -- press `?` for the full list
+- **Error boundary** -- graceful error recovery
 - **Dark mode** by default, toggleable
+- **Cross-platform** -- works on macOS, Windows, and Linux
 
 ## v2 Roadmap
 

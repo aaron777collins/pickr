@@ -207,6 +207,17 @@ pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, String> {
     }
 }
 
+/// Internal: the scan result preserves `faces` so we can write a full manifest
+/// to disk for face_match. We strip `faces` before returning to the frontend
+/// since it's not part of ManifestItem.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ScanResultItem {
+    #[serde(flatten)]
+    base: ManifestItem,
+    #[serde(default)]
+    faces: Vec<serde_json::Value>,
+}
+
 #[tauri::command]
 pub async fn scan_folder(path: String, app: AppHandle) -> Result<Vec<ManifestItem>, String> {
     let bin = find_sidecar()?;
@@ -224,7 +235,7 @@ pub async fn scan_folder(path: String, app: AppHandle) -> Result<Vec<ManifestIte
         .ok_or_else(|| "could not capture sidecar stdout".to_string())?;
     let mut lines = BufReader::new(stdout).lines();
 
-    let mut manifest: Option<Vec<ManifestItem>> = None;
+    let mut scan_result: Option<Vec<ScanResultItem>> = None;
 
     while let Some(line) = lines
         .next_line()
@@ -245,7 +256,7 @@ pub async fn scan_folder(path: String, app: AppHandle) -> Result<Vec<ManifestIte
             }
             Some("result") => {
                 let data = msg.get("data").cloned().unwrap_or(serde_json::Value::Null);
-                manifest = Some(
+                scan_result = Some(
                     serde_json::from_value(data)
                         .map_err(|e| format!("could not parse manifest: {e}"))?,
                 );
@@ -266,18 +277,105 @@ pub async fn scan_folder(path: String, app: AppHandle) -> Result<Vec<ManifestIte
         .await
         .map_err(|e| format!("sidecar wait failed: {e}"))?;
 
-    match manifest {
-        Some(m) => Ok(m),
+    let items = match scan_result {
+        Some(m) => m,
         None if !status.success() => {
             let mut err = String::new();
             if let Some(mut stderr) = child.stderr.take() {
                 use tokio::io::AsyncReadExt;
                 let _ = stderr.read_to_string(&mut err).await;
             }
-            Err(format!("sidecar exited with {status}: {err}"))
+            return Err(format!("sidecar exited with {status}: {err}"));
         }
-        None => Err("sidecar produced no manifest".to_string()),
+        None => return Err("sidecar produced no manifest".to_string()),
+    };
+
+    // Run dedup to populate dup_group fields.
+    let items = run_dedup(&bin, items).await?;
+
+    // Save the full manifest (with faces) to .pickr/manifest.json for face_match.
+    save_manifest(&path, &items).await?;
+
+    Ok(items.into_iter().map(|i| i.base).collect())
+}
+
+/// Write a temporary manifest file, run the dedup sidecar command, and merge
+/// the resulting dup_group values back into the scan items.
+async fn run_dedup(bin: &Path, items: Vec<ScanResultItem>) -> Result<Vec<ScanResultItem>, String> {
+    if items.is_empty() {
+        return Ok(items);
     }
+
+    let manifest_json: Vec<serde_json::Value> = items
+        .iter()
+        .map(|i| serde_json::to_value(i).unwrap_or_default())
+        .collect();
+
+    let tmp = tempfile::NamedTempFile::new()
+        .map_err(|e| format!("could not create temp file for dedup: {e}"))?;
+    let tmp_path = tmp.path().to_path_buf();
+
+    tokio::fs::write(&tmp_path, serde_json::to_vec(&manifest_json).unwrap_or_default())
+        .await
+        .map_err(|e| format!("could not write temp manifest for dedup: {e}"))?;
+
+    let output = Command::new(bin)
+        .args(["dedup", &tmp_path.to_string_lossy()])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| format!("failed to spawn dedup sidecar: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("dedup sidecar failed: {stderr}"));
+    }
+
+    let stdout =
+        String::from_utf8(output.stdout).map_err(|e| format!("dedup produced invalid UTF-8: {e}"))?;
+
+    let deduped: Vec<serde_json::Value> = parse_result_line(&stdout)?;
+
+    let dup_groups: HashMap<String, Option<u32>> = deduped
+        .iter()
+        .filter_map(|v| {
+            let path = v.get("path")?.as_str()?.to_string();
+            let dg = v.get("dup_group").and_then(|d| d.as_u64()).map(|d| d as u32);
+            Some((path, dg))
+        })
+        .collect();
+
+    let result: Vec<ScanResultItem> = items
+        .into_iter()
+        .map(|mut item| {
+            if let Some(dg) = dup_groups.get(&item.base.path) {
+                item.base.dup_group = *dg;
+            }
+            item
+        })
+        .collect();
+
+    Ok(result)
+}
+
+/// Save the full scan manifest (including face embeddings) to .pickr/manifest.json
+/// so the face_match command can read it.
+async fn save_manifest(folder: &str, items: &[ScanResultItem]) -> Result<(), String> {
+    let pickr_dir = Path::new(folder).join(".pickr");
+    tokio::fs::create_dir_all(&pickr_dir)
+        .await
+        .map_err(|e| format!("could not create .pickr directory: {e}"))?;
+
+    let manifest_path = pickr_dir.join("manifest.json");
+    let json = serde_json::to_vec_pretty(items)
+        .map_err(|e| format!("could not serialize manifest: {e}"))?;
+
+    tokio::fs::write(&manifest_path, &json)
+        .await
+        .map_err(|e| format!("could not write manifest: {e}"))?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -339,18 +437,22 @@ pub async fn export_renamed(
 
 #[tauri::command]
 pub async fn save_project(folder: String, project: ProjectJson) -> Result<(), String> {
-    let dir = Path::new(&folder);
+    let pickr_dir = Path::new(&folder).join(".pickr");
+    tokio::fs::create_dir_all(&pickr_dir)
+        .await
+        .map_err(|e| format!("could not create .pickr directory: {e}"))?;
+
     let json = serde_json::to_vec_pretty(&project)
         .map_err(|e| format!("could not serialize project: {e}"))?;
 
-    let tmp_name = format!(".pickr.{}.tmp", uuid::Uuid::new_v4());
-    let tmp_path = dir.join(tmp_name);
+    let tmp_name = format!("project.{}.tmp", uuid::Uuid::new_v4());
+    let tmp_path = pickr_dir.join(tmp_name);
 
     tokio::fs::write(&tmp_path, &json)
         .await
         .map_err(|e| format!("could not write project file: {e}"))?;
 
-    let final_path = dir.join(".pickr.json");
+    let final_path = pickr_dir.join("project.json");
     if let Err(e) = tokio::fs::rename(&tmp_path, &final_path).await {
         let _ = tokio::fs::remove_file(&tmp_path).await;
         return Err(format!("could not finalize project file: {e}"));
@@ -361,7 +463,17 @@ pub async fn save_project(folder: String, project: ProjectJson) -> Result<(), St
 
 #[tauri::command]
 pub async fn load_project(folder: String) -> Result<Option<ProjectJson>, String> {
-    let path = Path::new(&folder).join(".pickr.json");
+    let new_path = Path::new(&folder).join(".pickr").join("project.json");
+    let legacy_path = Path::new(&folder).join(".pickr.json");
+
+    let path = if new_path.exists() {
+        new_path
+    } else if legacy_path.exists() {
+        legacy_path
+    } else {
+        return Ok(None);
+    };
+
     match tokio::fs::read(&path).await {
         Ok(bytes) => {
             let project = serde_json::from_slice(&bytes)
@@ -382,7 +494,14 @@ pub async fn open_in_explorer(path: String) -> Result<(), String> {
         p.parent().map(|d| d.to_path_buf()).unwrap_or(p.to_path_buf())
     };
 
-    std::process::Command::new("xdg-open")
+    #[cfg(target_os = "macos")]
+    let cmd = "open";
+    #[cfg(target_os = "windows")]
+    let cmd = "explorer";
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let cmd = "xdg-open";
+
+    std::process::Command::new(cmd)
         .arg(&target)
         .spawn()
         .map_err(|e| format!("could not open file manager: {e}"))?;

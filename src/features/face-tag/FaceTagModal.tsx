@@ -135,7 +135,7 @@ export function FaceTagModal({ imagePath, onClose }: FaceTagModalProps) {
     }
     setMatching(true);
     try {
-      const manifestPath = `${folder}/.pickr/manifest.json`;
+      const manifestPath = folder + "/.pickr/manifest.json";
       const matches = await faceMatch(face.box.embedding_b64, manifestPath);
       const unique = Array.from(new Set([imagePath, ...matches]));
       addFilesToIdentity(face.name, unique);
