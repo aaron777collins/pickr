@@ -14,6 +14,23 @@ from typing import Any
 logger = logging.getLogger("pickr_sidecar")
 
 
+def _configure_streams() -> None:
+    # The Rust parent splits stdout on '\n' and parses each line as UTF-8 JSON.
+    # On Windows, stdout defaults to text mode (translates '\n' -> '\r\n') and to
+    # the locale codepage, both of which corrupt the NDJSON stream. Force UTF-8
+    # and disable newline translation on every platform so output is identical.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", newline="\n")
+            except (ValueError, OSError):
+                pass
+
+
+_configure_streams()
+
+
 def _setup_logging() -> None:
     if logger.handlers:
         return

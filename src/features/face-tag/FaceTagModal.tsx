@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { faceDetect, faceMatch } from "@/lib/commands";
-import { assetUrl } from "@/lib/utils";
+import { assetUrl, joinPath } from "@/lib/utils";
 import type { FaceBox } from "@/lib/types";
 import { useIdentitiesStore } from "@/stores/identitiesStore";
 import { useFiltersStore } from "@/stores/filtersStore";
@@ -135,7 +135,7 @@ export function FaceTagModal({ imagePath, onClose }: FaceTagModalProps) {
     }
     setMatching(true);
     try {
-      const manifestPath = folder + "/.pickr/manifest.json";
+      const manifestPath = joinPath(folder, ".pickr", "manifest.json");
       const matches = await faceMatch(face.box.embedding_b64, manifestPath);
       const unique = Array.from(new Set([imagePath, ...matches]));
       addFilesToIdentity(face.name, unique);

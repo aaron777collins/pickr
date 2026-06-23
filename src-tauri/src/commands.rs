@@ -80,8 +80,8 @@ pub struct ScanProgress {
 /// Locate the `pickr-sidecar` binary. Checks, in order:
 /// 1. `$PICKR_SIDECAR_PATH`
 /// 2. a `pickr-sidecar` on `$PATH`
-/// 3. `./sidecar/.venv/bin/pickr-sidecar` relative to CWD
-/// 4. `sidecar/.venv/bin/pickr-sidecar` walking up from CWD toward the repo root
+/// 3. `sidecar/.venv/{bin,Scripts}/pickr-sidecar[.exe]` relative to CWD
+/// 4. same pattern walking up from CWD toward the repo root
 fn find_sidecar() -> Result<PathBuf, String> {
     if let Ok(p) = std::env::var("PICKR_SIDECAR_PATH") {
         let path = PathBuf::from(&p);
@@ -94,19 +94,18 @@ fn find_sidecar() -> Result<PathBuf, String> {
         return Ok(p);
     }
 
-    let rel = Path::new("sidecar/.venv/bin/pickr-sidecar");
-
     if let Ok(cwd) = std::env::current_dir() {
-        let direct = cwd.join(rel);
-        if direct.is_file() {
-            return Ok(direct);
-        }
-        // Walk up from CWD looking for sidecar/.venv/bin/pickr-sidecar.
-        let mut dir: Option<&Path> = Some(cwd.as_path());
-        while let Some(d) = dir {
-            let candidate = d.join(rel);
+        for candidate in sidecar_candidates(&cwd) {
             if candidate.is_file() {
                 return Ok(candidate);
+            }
+        }
+        let mut dir: Option<&Path> = Some(cwd.as_path());
+        while let Some(d) = dir {
+            for candidate in sidecar_candidates(d) {
+                if candidate.is_file() {
+                    return Ok(candidate);
+                }
             }
             dir = d.parent();
         }
@@ -114,17 +113,32 @@ fn find_sidecar() -> Result<PathBuf, String> {
 
     Err(
         "Could not locate the pickr-sidecar binary. Set PICKR_SIDECAR_PATH, put it on PATH, \
-         or build it at sidecar/.venv/bin/pickr-sidecar."
+         or build it at sidecar/.venv/bin/pickr-sidecar (or Scripts\\pickr-sidecar.exe on Windows)."
             .to_string(),
     )
 }
 
+fn sidecar_candidates(base: &Path) -> Vec<PathBuf> {
+    vec![
+        base.join("sidecar/.venv/bin/pickr-sidecar"),
+        base.join("sidecar/.venv/Scripts/pickr-sidecar.exe"),
+        base.join("sidecar/.venv/Scripts/pickr-sidecar"),
+    ]
+}
+
 fn which_on_path(name: &str) -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
+    let names: &[&str] = if cfg!(windows) {
+        &[&format!("{name}.exe"), name]
+    } else {
+        &[name]
+    };
     for dir in std::env::split_paths(&path_var) {
-        let candidate = dir.join(name);
-        if candidate.is_file() {
-            return Some(candidate);
+        for n in names {
+            let candidate = dir.join(n);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
         }
     }
     None
