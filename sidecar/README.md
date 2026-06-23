@@ -12,10 +12,13 @@ line). All logging goes to **stderr**.
 ```bash
 cd sidecar
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate         # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"          # core + test deps
 pip install -e ".[dev,faces]"    # also install face_recognition (needs dlib/cmake)
 ```
+
+On Windows, `dlib` (the `faces` extra) needs Visual Studio Build Tools + CMake to
+compile; if it fails, the core `scan`/`dedup`/thumbnail features still work.
 
 `face_recognition` depends on `dlib`, which needs `cmake` and a C++ toolchain and
 can be slow or fail to build. It is an **optional** extra (`faces`). Without it,

@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.2.0
+## v0.3.0
 
 ### New Features
 - **Smart filters** -- Sharp only, Has faces, Hide duplicates, Skipped only, and per-person filtering
