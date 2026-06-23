@@ -80,8 +80,11 @@ pub struct ScanProgress {
 /// Locate the `pickr-sidecar` binary. Checks, in order:
 /// 1. `$PICKR_SIDECAR_PATH`
 /// 2. a `pickr-sidecar` on `$PATH`
-/// 3. `sidecar/.venv/{bin,Scripts}/pickr-sidecar[.exe]` relative to CWD
-/// 4. same pattern walking up from CWD toward the repo root
+/// 3. `sidecar/.venv/{bin,Scripts}/pickr-sidecar[.exe]` next to and walking up
+///    from the running executable (works as a packaged desktop app, where the
+///    CWD is arbitrary — e.g. the user's home or system32)
+/// 4. the same pattern next to and walking up from the CWD (covers `cargo run`
+///    and bare-binary invocations from the repo)
 fn find_sidecar() -> Result<PathBuf, String> {
     if let Ok(p) = std::env::var("PICKR_SIDECAR_PATH") {
         let path = PathBuf::from(&p);
@@ -94,20 +97,19 @@ fn find_sidecar() -> Result<PathBuf, String> {
         return Ok(p);
     }
 
-    if let Ok(cwd) = std::env::current_dir() {
-        for candidate in sidecar_candidates(&cwd) {
-            if candidate.is_file() {
-                return Ok(candidate);
-            }
+    // Walking up from the executable is the reliable anchor for a desktop app:
+    // in dev the exe lives at `src-tauri/target/debug/pickr`, so its ancestors
+    // include the repo root where `sidecar/.venv/` lives; in a packaged build
+    // the sidecar can be staged next to the app binary.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(found) = search_ancestors(&exe) {
+            return Ok(found);
         }
-        let mut dir: Option<&Path> = Some(cwd.as_path());
-        while let Some(d) = dir {
-            for candidate in sidecar_candidates(d) {
-                if candidate.is_file() {
-                    return Ok(candidate);
-                }
-            }
-            dir = d.parent();
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Some(found) = search_ancestors(&cwd) {
+            return Ok(found);
         }
     }
 
@@ -116,6 +118,26 @@ fn find_sidecar() -> Result<PathBuf, String> {
          or build it at sidecar/.venv/bin/pickr-sidecar (or Scripts\\pickr-sidecar.exe on Windows)."
             .to_string(),
     )
+}
+
+/// Search `start` and each of its ancestor directories for a sidecar binary.
+/// If `start` is a file (e.g. the running executable), its parent directory is
+/// used as the first candidate.
+fn search_ancestors(start: &Path) -> Option<PathBuf> {
+    let mut dir: Option<&Path> = if start.is_file() {
+        start.parent()
+    } else {
+        Some(start)
+    };
+    while let Some(d) = dir {
+        for candidate in sidecar_candidates(d) {
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+        dir = d.parent();
+    }
+    None
 }
 
 fn sidecar_candidates(base: &Path) -> Vec<PathBuf> {
