@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.0
+
+### Fixes
+- **Sidecar bundled with production builds** -- PyInstaller compiles the Python sidecar into a standalone binary that ships inside the app; no Python installation required for end users
+- **Fixed CI release builds** -- the `beforeBuildCommand` no longer depends on bash scripts; sidecar binary is built as a separate CI step before Tauri packages the app
+- **Tauri externalBin integration** -- the sidecar binary is declared as an external binary in `tauri.conf.json` so Tauri bundles it next to the app exe on all platforms
+
 ## v0.4.0
 
 ### Fixes

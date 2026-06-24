@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Pickr v0.4.0 — One-liner setup
+# Pickr v0.5.0 — One-liner setup
 # Usage: curl -fsSL https://raw.githubusercontent.com/aaron777collins/pickr/main/setup.sh | bash
 
 REPO="https://github.com/aaron777collins/pickr.git"
 DIR="pickr"
 
 echo "=============================="
-echo "  Pickr v0.4.0 — Setup"
+echo "  Pickr v0.5.0 — Setup"
 echo "=============================="
 echo
 
