@@ -116,15 +116,15 @@ fn clean_path(p: PathBuf) -> PathBuf {
 
 /// Locate the sidecar. Returns a `SidecarCmd` that can be a direct binary
 /// or a `python -m pickr_sidecar` invocation. Checks, in order:
-/// 1. `$PICKR_SIDECAR_PATH`
-/// 2. `pickr-sidecar` on `$PATH`
-/// 3. Walk up from the running executable looking for the installed binary
-/// 4. Walk up from CWD looking for the installed binary
-/// 5. Walk up from exe/CWD looking for the venv's Python interpreter
-///    (fallback: runs `python -m pickr_sidecar`)
+/// 1. `$PICKR_SIDECAR_PATH` env var
+/// 2. Bundled binary next to the running executable (production installs)
+/// 3. `pickr-sidecar` on `$PATH`
+/// 4. Walk up from exe/CWD looking for venv-installed binary
+/// 5. Walk up from exe/CWD looking for venv Python (runs `-m pickr_sidecar`)
 fn find_sidecar() -> Result<SidecarCmd, String> {
     let mut searched: Vec<String> = Vec::new();
 
+    // 1. Explicit env var
     if let Ok(p) = std::env::var("PICKR_SIDECAR_PATH") {
         let path = PathBuf::from(&p);
         if path.is_file() {
@@ -133,16 +133,30 @@ fn find_sidecar() -> Result<SidecarCmd, String> {
         searched.push(format!("PICKR_SIDECAR_PATH={p}"));
     }
 
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .map(clean_path)
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+
+    // 2. Bundled binary next to the exe (Tauri externalBin puts it here)
+    if let Some(ref dir) = exe_dir {
+        for name in &bundled_sidecar_names() {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Ok(SidecarCmd::binary(candidate));
+            }
+            searched.push(format!("{}", candidate.display()));
+        }
+    }
+
+    // 3. On PATH
     if let Some(p) = which_on_path("pickr-sidecar") {
         return Ok(SidecarCmd::binary(p));
     }
     searched.push("PATH (pickr-sidecar not found)".into());
 
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .map(clean_path);
+    // 4 & 5. Walk up from exe and CWD looking for venv
     let cwd = std::env::current_dir().ok();
-
     let roots: Vec<&Path> = [exe_dir.as_deref(), cwd.as_deref()]
         .into_iter()
         .flatten()
@@ -153,7 +167,6 @@ fn find_sidecar() -> Result<SidecarCmd, String> {
             return Ok(SidecarCmd::binary(found));
         }
     }
-
     for root in &roots {
         if let Some(found) = search_ancestors(root, &python_candidates) {
             return Ok(SidecarCmd::python_module(found));
@@ -161,19 +174,27 @@ fn find_sidecar() -> Result<SidecarCmd, String> {
     }
 
     if let Some(ref e) = exe_dir {
-        searched.push(format!("exe: {}", e.display()));
+        searched.push(format!("exe dir: {}", e.display()));
     }
     if let Some(ref c) = cwd {
         searched.push(format!("cwd: {}", c.display()));
     }
 
     Err(format!(
-        "Could not locate the pickr-sidecar binary or its Python venv. \
-         Set PICKR_SIDECAR_PATH, put pickr-sidecar on PATH, or set up the \
-         sidecar venv (cd sidecar && python -m venv .venv && pip install -e .). \
+        "Could not locate the pickr-sidecar binary. \
          Searched: [{}]",
         searched.join(", ")
     ))
+}
+
+fn bundled_sidecar_names() -> Vec<String> {
+    let mut names = vec![
+        "pickr-sidecar".to_string(),
+    ];
+    if cfg!(windows) {
+        names.insert(0, "pickr-sidecar.exe".to_string());
+    }
+    names
 }
 
 /// Walk from `start` (using its parent if it's a file) up through ancestors,

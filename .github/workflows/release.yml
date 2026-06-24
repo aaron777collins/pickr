@@ -55,18 +55,21 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Setup Python sidecar
+      - name: Install sidecar Python deps
         shell: bash
         run: |
           cd sidecar
-          python3 -m venv .venv
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            source .venv/Scripts/activate
-          else
-            source .venv/bin/activate
-          fi
           pip install -e ".[dev]"
           pip install -e ".[faces]" || echo "face_recognition skipped (dlib build failed)"
+          pip install pyinstaller
+
+      - name: Build sidecar binary
+        shell: bash
+        run: |
+          cd sidecar
+          python build_binary.py --target-triple ${{ matrix.rust_target }}
+          echo "--- Built sidecar binaries ---"
+          ls -la ../src-tauri/binaries/
 
       - name: Install frontend deps
         run: npm ci
