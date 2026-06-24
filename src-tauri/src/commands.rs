@@ -77,61 +77,113 @@ pub struct ScanProgress {
 // Sidecar discovery
 // ---------------------------------------------------------------------------
 
-/// Locate the `pickr-sidecar` binary. Checks, in order:
+#[derive(Debug, Clone)]
+struct SidecarCmd {
+    program: PathBuf,
+    prefix_args: Vec<String>,
+}
+
+impl SidecarCmd {
+    fn binary(path: PathBuf) -> Self {
+        Self { program: path, prefix_args: vec![] }
+    }
+    fn python_module(python: PathBuf) -> Self {
+        Self {
+            program: python,
+            prefix_args: vec!["-m".into(), "pickr_sidecar".into()],
+        }
+    }
+    fn command(&self, args: &[&str]) -> Command {
+        let mut cmd = Command::new(&self.program);
+        for a in &self.prefix_args {
+            cmd.arg(a);
+        }
+        cmd.args(args);
+        cmd
+    }
+}
+
+/// Strip the Windows extended-length path prefix (`\\?\`) so that normal
+/// path operations and `exists()`/`is_file()` work reliably.
+fn clean_path(p: PathBuf) -> PathBuf {
+    let s = p.to_string_lossy();
+    if s.starts_with(r"\\?\") {
+        PathBuf::from(&s[4..])
+    } else {
+        p
+    }
+}
+
+/// Locate the sidecar. Returns a `SidecarCmd` that can be a direct binary
+/// or a `python -m pickr_sidecar` invocation. Checks, in order:
 /// 1. `$PICKR_SIDECAR_PATH`
-/// 2. a `pickr-sidecar` on `$PATH`
-/// 3. `sidecar/.venv/{bin,Scripts}/pickr-sidecar[.exe]` next to and walking up
-///    from the running executable (works as a packaged desktop app, where the
-///    CWD is arbitrary — e.g. the user's home or system32)
-/// 4. the same pattern next to and walking up from the CWD (covers `cargo run`
-///    and bare-binary invocations from the repo)
-fn find_sidecar() -> Result<PathBuf, String> {
+/// 2. `pickr-sidecar` on `$PATH`
+/// 3. Walk up from the running executable looking for the installed binary
+/// 4. Walk up from CWD looking for the installed binary
+/// 5. Walk up from exe/CWD looking for the venv's Python interpreter
+///    (fallback: runs `python -m pickr_sidecar`)
+fn find_sidecar() -> Result<SidecarCmd, String> {
+    let mut searched: Vec<String> = Vec::new();
+
     if let Ok(p) = std::env::var("PICKR_SIDECAR_PATH") {
         let path = PathBuf::from(&p);
         if path.is_file() {
-            return Ok(path);
+            return Ok(SidecarCmd::binary(path));
         }
+        searched.push(format!("PICKR_SIDECAR_PATH={p}"));
     }
 
     if let Some(p) = which_on_path("pickr-sidecar") {
-        return Ok(p);
+        return Ok(SidecarCmd::binary(p));
     }
+    searched.push("PATH (pickr-sidecar not found)".into());
 
-    // Walking up from the executable is the reliable anchor for a desktop app:
-    // in dev the exe lives at `src-tauri/target/debug/pickr`, so its ancestors
-    // include the repo root where `sidecar/.venv/` lives; in a packaged build
-    // the sidecar can be staged next to the app binary.
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(found) = search_ancestors(&exe) {
-            return Ok(found);
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .map(clean_path);
+    let cwd = std::env::current_dir().ok();
+
+    let roots: Vec<&Path> = [exe_dir.as_deref(), cwd.as_deref()]
+        .into_iter()
+        .flatten()
+        .collect();
+
+    for root in &roots {
+        if let Some(found) = search_ancestors(root, &sidecar_binary_candidates) {
+            return Ok(SidecarCmd::binary(found));
         }
     }
 
-    if let Ok(cwd) = std::env::current_dir() {
-        if let Some(found) = search_ancestors(&cwd) {
-            return Ok(found);
+    for root in &roots {
+        if let Some(found) = search_ancestors(root, &python_candidates) {
+            return Ok(SidecarCmd::python_module(found));
         }
     }
 
-    Err(
-        "Could not locate the pickr-sidecar binary. Set PICKR_SIDECAR_PATH, put it on PATH, \
-         or build it at sidecar/.venv/bin/pickr-sidecar (or Scripts\\pickr-sidecar.exe on Windows)."
-            .to_string(),
-    )
+    if let Some(ref e) = exe_dir {
+        searched.push(format!("exe: {}", e.display()));
+    }
+    if let Some(ref c) = cwd {
+        searched.push(format!("cwd: {}", c.display()));
+    }
+
+    Err(format!(
+        "Could not locate the pickr-sidecar binary or its Python venv. \
+         Set PICKR_SIDECAR_PATH, put pickr-sidecar on PATH, or set up the \
+         sidecar venv (cd sidecar && python -m venv .venv && pip install -e .). \
+         Searched: [{}]",
+        searched.join(", ")
+    ))
 }
 
-/// Search `start` and each of its ancestor directories for a sidecar binary.
-/// If `start` is a file (e.g. the running executable), its parent directory is
-/// used as the first candidate.
-fn search_ancestors(start: &Path) -> Option<PathBuf> {
-    let mut dir: Option<&Path> = if start.is_file() {
-        start.parent()
-    } else {
-        Some(start)
-    };
+/// Walk from `start` (using its parent if it's a file) up through ancestors,
+/// returning the first candidate from `candidates_fn` that exists.
+fn search_ancestors(start: &Path, candidates_fn: &dyn Fn(&Path) -> Vec<PathBuf>) -> Option<PathBuf> {
+    let first = if start.is_file() { start.parent()? } else { start };
+    let mut dir = Some(first);
     while let Some(d) = dir {
-        for candidate in sidecar_candidates(d) {
-            if candidate.is_file() {
+        for candidate in candidates_fn(d) {
+            if candidate.exists() && candidate.is_file() {
                 return Some(candidate);
             }
         }
@@ -140,23 +192,32 @@ fn search_ancestors(start: &Path) -> Option<PathBuf> {
     None
 }
 
-fn sidecar_candidates(base: &Path) -> Vec<PathBuf> {
+fn sidecar_binary_candidates(base: &Path) -> Vec<PathBuf> {
     vec![
-        base.join("sidecar/.venv/bin/pickr-sidecar"),
-        base.join("sidecar/.venv/Scripts/pickr-sidecar.exe"),
-        base.join("sidecar/.venv/Scripts/pickr-sidecar"),
+        base.join("sidecar").join(".venv").join("bin").join("pickr-sidecar"),
+        base.join("sidecar").join(".venv").join("Scripts").join("pickr-sidecar.exe"),
+        base.join("sidecar").join(".venv").join("Scripts").join("pickr-sidecar"),
+    ]
+}
+
+fn python_candidates(base: &Path) -> Vec<PathBuf> {
+    vec![
+        base.join("sidecar").join(".venv").join("bin").join("python"),
+        base.join("sidecar").join(".venv").join("bin").join("python3"),
+        base.join("sidecar").join(".venv").join("Scripts").join("python.exe"),
+        base.join("sidecar").join(".venv").join("Scripts").join("python"),
     ]
 }
 
 fn which_on_path(name: &str) -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
-    let names: &[&str] = if cfg!(windows) {
-        &[&format!("{name}.exe"), name]
+    let names: Vec<String> = if cfg!(windows) {
+        vec![format!("{name}.exe"), name.to_string()]
     } else {
-        &[name]
+        vec![name.to_string()]
     };
     for dir in std::env::split_paths(&path_var) {
-        for n in names {
+        for n in &names {
             let candidate = dir.join(n);
             if candidate.is_file() {
                 return Some(candidate);
@@ -166,12 +227,10 @@ fn which_on_path(name: &str) -> Option<PathBuf> {
     None
 }
 
-/// Spawn the sidecar with the given args and return its full stdout. Used for
-/// commands that do not stream progress.
+/// Spawn the sidecar with the given args and return its full stdout.
 async fn run_sidecar(args: &[&str]) -> Result<String, String> {
-    let bin = find_sidecar()?;
-    let output = Command::new(&bin)
-        .args(args)
+    let cmd = find_sidecar()?;
+    let output = cmd.command(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -256,10 +315,9 @@ struct ScanResultItem {
 
 #[tauri::command]
 pub async fn scan_folder(path: String, app: AppHandle) -> Result<Vec<ManifestItem>, String> {
-    let bin = find_sidecar()?;
+    let sidecar = find_sidecar()?;
 
-    let mut child = Command::new(&bin)
-        .args(["scan", &path])
+    let mut child = sidecar.command(&["scan", &path])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -327,7 +385,7 @@ pub async fn scan_folder(path: String, app: AppHandle) -> Result<Vec<ManifestIte
     };
 
     // Run dedup to populate dup_group fields.
-    let items = run_dedup(&bin, items).await?;
+    let items = run_dedup(&sidecar, items).await?;
 
     // Save the full manifest (with faces) to .pickr/manifest.json for face_match.
     save_manifest(&path, &items).await?;
@@ -337,7 +395,7 @@ pub async fn scan_folder(path: String, app: AppHandle) -> Result<Vec<ManifestIte
 
 /// Write a temporary manifest file, run the dedup sidecar command, and merge
 /// the resulting dup_group values back into the scan items.
-async fn run_dedup(bin: &Path, items: Vec<ScanResultItem>) -> Result<Vec<ScanResultItem>, String> {
+async fn run_dedup(sidecar: &SidecarCmd, items: Vec<ScanResultItem>) -> Result<Vec<ScanResultItem>, String> {
     if items.is_empty() {
         return Ok(items);
     }
@@ -355,8 +413,7 @@ async fn run_dedup(bin: &Path, items: Vec<ScanResultItem>) -> Result<Vec<ScanRes
         .await
         .map_err(|e| format!("could not write temp manifest for dedup: {e}"))?;
 
-    let output = Command::new(bin)
-        .args(["dedup", &tmp_path.to_string_lossy()])
+    let output = sidecar.command(&["dedup", &tmp_path.to_string_lossy()])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

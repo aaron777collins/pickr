@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.0
+
+### Fixes
+- **Sidecar discovery completely rewritten** -- works reliably on Windows, macOS, and Linux
+  - Strips Windows `\\?\` extended-length path prefix from `current_exe()`
+  - Uses proper `Path::join` with individual segments instead of forward-slash strings
+  - Falls back to running `python -m pickr_sidecar` from the venv when the installed binary isn't found
+  - Error message now shows which paths were searched for easier debugging
+
 ## v0.3.0
 
 ### New Features
