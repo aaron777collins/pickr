@@ -1,6 +1,6 @@
 [package]
 name = "pickr"
-version = "0.5.0"
+version = "0.6.0"
 description = "Drag-to-reorder photo/video curation tool"
 authors = ["Pickr Contributors"]
 edition = "2021"
