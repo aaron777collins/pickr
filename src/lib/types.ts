@@ -10,6 +10,7 @@ export interface ManifestItem {
   phash: string | null;
   thumb_path: string | null;
   dup_group: number | null;
+  preview_path: string | null;
 }
 
 export interface FaceBox {

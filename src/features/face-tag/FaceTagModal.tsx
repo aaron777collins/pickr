@@ -18,6 +18,7 @@ import { useProjectStore } from "@/stores/projectStore";
 
 interface FaceTagModalProps {
   imagePath: string;
+  previewPath?: string | null;
   onClose: () => void;
 }
 
@@ -33,7 +34,7 @@ interface TaggedFace {
  * Workflow: detect faces -> overlay clickable boxes -> label -> find matches
  * across the manifest -> auto-apply the person filter.
  */
-export function FaceTagModal({ imagePath, onClose }: FaceTagModalProps) {
+export function FaceTagModal({ imagePath, previewPath, onClose }: FaceTagModalProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [faces, setFaces] = useState<TaggedFace[]>([]);
@@ -177,7 +178,7 @@ export function FaceTagModal({ imagePath, onClose }: FaceTagModalProps) {
             <div className="relative">
               <img
                 ref={imgRef}
-                src={assetUrl(imagePath)}
+                src={assetUrl(previewPath ?? imagePath)}
                 alt="Tagging target"
                 onLoad={onImgLoad}
                 className="block max-h-[70vh] max-w-full object-contain"

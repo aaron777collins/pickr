@@ -131,7 +131,7 @@ export function Lightbox() {
         ) : (
           <img
             key={item.path}
-            src={assetUrl(item.path)}
+            src={assetUrl(item.preview_path ?? item.path)}
             alt={item.filename}
             className="max-h-[80vh] max-w-full object-contain"
           />
@@ -190,6 +190,7 @@ export function Lightbox() {
         <div onClick={(e) => e.stopPropagation()}>
           <FaceTagModal
             imagePath={item.path}
+            previewPath={item.preview_path}
             onClose={() => setTagging(false)}
           />
         </div>

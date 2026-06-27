@@ -24,6 +24,7 @@ pub struct ManifestItem {
     pub phash: Option<String>,
     pub thumb_path: Option<String>,
     pub dup_group: Option<u32>,
+    pub preview_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
