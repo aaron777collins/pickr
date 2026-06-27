@@ -47,7 +47,21 @@ pub struct ExportItem {
 pub struct ExportSummary {
     pub exported_count: u32,
     pub skipped_count: u32,
+    #[serde(default)]
     pub dest_folder: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlurExportItem {
+    pub src: String,
+    pub dest: String,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlurExportConfig {
+    pub keep_embeddings: Vec<String>,
+    pub items: Vec<BlurExportItem>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -622,4 +636,61 @@ pub async fn open_in_explorer(path: String) -> Result<(), String> {
         .map_err(|e| format!("could not open file manager: {e}"))?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn blur_export(config: BlurExportConfig, app: AppHandle) -> Result<ExportSummary, String> {
+    let sidecar = find_sidecar()?;
+
+    let config_json = serde_json::to_vec(&config)
+        .map_err(|e| format!("could not serialize blur config: {e}"))?;
+
+    let tmp = tempfile::NamedTempFile::new()
+        .map_err(|e| format!("could not create temp file: {e}"))?;
+    let tmp_path = tmp.path().to_path_buf();
+
+    tokio::fs::write(&tmp_path, &config_json)
+        .await
+        .map_err(|e| format!("could not write blur config: {e}"))?;
+
+    let mut child = sidecar.command(&["blur_export", &tmp_path.to_string_lossy()])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("failed to spawn sidecar: {e}"))?;
+
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "could not capture sidecar stdout".to_string())?;
+    let mut lines = BufReader::new(stdout).lines();
+
+    let mut result: Option<ExportSummary> = None;
+
+    while let Some(line) = lines.next_line().await
+        .map_err(|e| format!("error reading sidecar output: {e}"))? {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        let msg: serde_json::Value = serde_json::from_str(line)
+            .map_err(|e| format!("invalid JSON from sidecar: {e}"))?;
+        match msg.get("type").and_then(|v| v.as_str()) {
+            Some("progress") => {
+                if let Ok(progress) = serde_json::from_value::<ScanProgress>(msg.clone()) {
+                    let _ = app.emit("blur-progress", progress);
+                }
+            }
+            Some("result") => {
+                let data = msg.get("data").cloned().unwrap_or(serde_json::Value::Null);
+                result = Some(serde_json::from_value(data)
+                    .map_err(|e| format!("could not parse blur result: {e}"))?);
+            }
+            Some("error") => {
+                let m = msg.get("message").and_then(|v| v.as_str()).unwrap_or("unknown sidecar error");
+                return Err(m.to_string());
+            }
+            _ => {}
+        }
+    }
+
+    child.wait().await.map_err(|e| format!("sidecar wait failed: {e}"))?;
+
+    result.ok_or_else(|| "sidecar produced no result".to_string())
 }

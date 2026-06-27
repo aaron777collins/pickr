@@ -4,6 +4,7 @@ import type {
   FaceBox,
   ExportItem,
   ExportSummary,
+  BlurExportConfig,
   ProjectJson,
 } from "./types";
 
@@ -42,6 +43,12 @@ export async function saveProject(
 
 export async function loadProject(folder: string): Promise<ProjectJson | null> {
   return invoke<ProjectJson | null>("load_project", { folder });
+}
+
+export async function blurExport(
+  config: BlurExportConfig
+): Promise<ExportSummary> {
+  return invoke<ExportSummary>("blur_export", { config });
 }
 
 export async function pickFolder(): Promise<string | null> {

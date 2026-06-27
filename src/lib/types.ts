@@ -33,6 +33,17 @@ export interface ExportSummary {
   dest_folder: string;
 }
 
+export interface BlurExportItem {
+  src: string;
+  dest: string;
+  kind: "image" | "video";
+}
+
+export interface BlurExportConfig {
+  keep_embeddings: string[];
+  items: BlurExportItem[];
+}
+
 export interface Identity {
   name: string;
   embedding_b64: string;
