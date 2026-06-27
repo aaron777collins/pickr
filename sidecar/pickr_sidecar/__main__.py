@@ -16,6 +16,7 @@ import os
 import sys
 
 from . import thumbs
+from .blur_export import run_blur_export
 from .dedup import assign_dup_groups
 from .protocol import emit_error, emit_result, logger
 from .recognize import cosine_similarity, decode_embedding, detect_faces
@@ -128,11 +129,19 @@ def cmd_face_match(args: list[str]) -> int:
     return 0
 
 
+def cmd_blur_export(args: list[str]) -> int:
+    if len(args) != 1:
+        emit_error("blur_export requires exactly one argument: <config_json_path>")
+        return 2
+    return run_blur_export(args[0])
+
+
 COMMANDS = {
     "scan": cmd_scan,
     "dedup": cmd_dedup,
     "face_detect": cmd_face_detect,
     "face_match": cmd_face_match,
+    "blur_export": cmd_blur_export,
 }
 
 
