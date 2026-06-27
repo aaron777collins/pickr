@@ -1,6 +1,6 @@
 [package]
 name = "pickr"
-version = "0.6.1"
+version = "0.7.0"
 description = "Drag-to-reorder photo/video curation tool"
 authors = ["Pickr Contributors"]
 edition = "2021"
@@ -13,7 +13,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
