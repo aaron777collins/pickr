@@ -14,6 +14,8 @@ from . import ai, thumbs
 from .protocol import emit_progress, emit_result, logger
 from .recognize import FACES_AVAILABLE, detect_faces
 
+_CACHE_VERSION = 2
+
 
 def _cache_path(folder: str) -> str:
     return os.path.join(folder, ".pickr", "cache.json")
@@ -23,7 +25,7 @@ def _load_cache(folder: str) -> dict:
     try:
         with open(_cache_path(folder), "r", encoding="utf-8") as fh:
             data = json.load(fh)
-            if isinstance(data, dict):
+            if isinstance(data, dict) and data.get("_version") == _CACHE_VERSION:
                 return data
     except FileNotFoundError:
         pass
@@ -36,6 +38,7 @@ def _save_cache(folder: str, cache: dict) -> None:
     path = _cache_path(folder)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     try:
+        cache["_version"] = _CACHE_VERSION
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(cache, fh)
     except Exception as exc:  # noqa: BLE001
@@ -87,6 +90,7 @@ def analyze_file(folder: str, filename: str) -> dict | None:
                     "face_count": 0,
                     "phash": None,
                     "thumb_path": None,
+                    "preview_path": None,
                 }
     except Exception as exc:  # noqa: BLE001
         logger.warning("Failed to load %s: %s", filename, exc)
@@ -124,6 +128,16 @@ def analyze_file(folder: str, filename: str) -> dict | None:
         logger.warning("Thumbnail failed for %s: %s", filename, exc)
         thumb_out = None
 
+    preview_out: str | None = None
+    _, ext = os.path.splitext(filename)
+    if ext.lower() in thumbs.NEEDS_PREVIEW_EXTS:
+        try:
+            preview_dest = thumbs.preview_path_for(folder, filename)
+            thumbs.write_preview(analysis_img, preview_dest)
+            preview_out = os.path.abspath(preview_dest)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Preview failed for %s: %s", filename, exc)
+
     return {
         "path": os.path.abspath(path),
         "filename": filename,
@@ -135,6 +149,7 @@ def analyze_file(folder: str, filename: str) -> dict | None:
         "face_count": face_count,
         "phash": phash,
         "thumb_path": thumb_out,
+        "preview_path": preview_out,
         "faces": faces,
     }
 
