@@ -1,4 +1,4 @@
-import { EyeOff, Layers, Sparkles, Users } from "lucide-react";
+import { CircleOff, EyeOff, Layers, ScanFace, Sparkles, Users } from "lucide-react";
 import { useFiltersStore } from "@/stores/filtersStore";
 import { useIdentitiesStore } from "@/stores/identitiesStore";
 import { cn } from "@/lib/utils";
@@ -40,18 +40,22 @@ export function FilterChips() {
     hideDuplicates,
     skippedOnly,
     personFilter,
+    showFaces,
+    blurUntagged,
     toggleSharpOnly,
     toggleHasPeople,
     toggleHideDuplicates,
     toggleSkippedOnly,
     setPersonFilter,
+    toggleShowFaces,
+    toggleBlurUntagged,
     clearAll,
   } = useFiltersStore();
 
   const identities = useIdentitiesStore((s) => s.identities);
 
   const anyActive =
-    sharpOnly || hasPeople || hideDuplicates || skippedOnly || !!personFilter;
+    sharpOnly || hasPeople || hideDuplicates || skippedOnly || !!personFilter || showFaces;
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -93,6 +97,20 @@ export function FilterChips() {
             icon={<EyeOff className="size-3.5" />}
             label="Skipped"
           />
+          <Chip
+            active={showFaces}
+            onClick={toggleShowFaces}
+            icon={<ScanFace className="size-3.5" />}
+            label="Show faces"
+          />
+          {showFaces && (
+            <Chip
+              active={blurUntagged}
+              onClick={toggleBlurUntagged}
+              icon={<CircleOff className="size-3.5" />}
+              label="Blur untagged"
+            />
+          )}
         </div>
       </div>
 
