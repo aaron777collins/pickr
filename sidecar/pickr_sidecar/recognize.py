@@ -70,11 +70,20 @@ _recognizer: cv2.FaceRecognizerSF | None = None
 _detector_input_size: tuple[int, int] = (0, 0)
 
 
+_SCORE_THRESHOLD = 0.9
+_NMS_THRESHOLD = 0.3
+_MIN_FACE_SIZE = 20
+
+
 def _get_detector(w: int, h: int) -> cv2.FaceDetectorYN:
     global _detector, _detector_input_size
     if _detector is None or _detector_input_size != (w, h):
         model_path = _ensure_model(_YUNET_FILENAME, _YUNET_URL)
-        _detector = cv2.FaceDetectorYN.create(model_path, "", (w, h), score_threshold=0.5)
+        _detector = cv2.FaceDetectorYN.create(
+            model_path, "", (w, h),
+            score_threshold=_SCORE_THRESHOLD,
+            nms_threshold=_NMS_THRESHOLD,
+        )
         _detector_input_size = (w, h)
     return _detector
 
@@ -103,6 +112,38 @@ def decode_embedding(b64: str) -> np.ndarray:
     return np.frombuffer(base64.b64decode(b64), dtype=np.float64)
 
 
+def _remove_contained_faces(raw_faces: np.ndarray, overlap_thresh: float = 0.6) -> np.ndarray:
+    """Remove detections mostly contained within a larger detection."""
+    if len(raw_faces) <= 1:
+        return raw_faces
+
+    boxes = raw_faces[:, :4].copy()
+    areas = boxes[:, 2] * boxes[:, 3]
+    keep = []
+
+    order = np.argsort(-areas)
+    kept_indices: list[int] = []
+
+    for idx in order:
+        x1, y1, w1, h1 = boxes[idx]
+        contained = False
+        for ki in kept_indices:
+            x2, y2, w2, h2 = boxes[ki]
+            ix1 = max(x1, x2)
+            iy1 = max(y1, y2)
+            ix2 = min(x1 + w1, x2 + w2)
+            iy2 = min(y1 + h1, y2 + h2)
+            if ix2 > ix1 and iy2 > iy1:
+                inter = (ix2 - ix1) * (iy2 - iy1)
+                if inter / max(areas[idx], 1) > overlap_thresh:
+                    contained = True
+                    break
+        if not contained:
+            kept_indices.append(idx)
+
+    return raw_faces[kept_indices] if kept_indices else raw_faces[:0]
+
+
 def detect_faces(image: Image.Image) -> list[dict]:
     """Return a list of {x, y, w, h, embedding_b64} for each face found.
 
@@ -118,6 +159,15 @@ def detect_faces(image: Image.Image) -> list[dict]:
         detector = _get_detector(w, h)
         _, raw_faces = detector.detect(bgr)
         if raw_faces is None or len(raw_faces) == 0:
+            return []
+
+        size_mask = (raw_faces[:, 2] >= _MIN_FACE_SIZE) & (raw_faces[:, 3] >= _MIN_FACE_SIZE)
+        raw_faces = raw_faces[size_mask]
+        if len(raw_faces) == 0:
+            return []
+
+        raw_faces = _remove_contained_faces(raw_faces)
+        if len(raw_faces) == 0:
             return []
 
         recognizer = _get_recognizer()
