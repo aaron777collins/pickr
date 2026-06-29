@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { pickFolder, exportRenamed, blurExport } from "@/lib/commands";
 import { useProjectStore } from "@/stores/projectStore";
 import { useIdentitiesStore } from "@/stores/identitiesStore";
+import { useFiltersStore } from "@/stores/filtersStore";
 import { useOrderedItems } from "@/lib/useOrderedItems";
 import { truncatePath } from "@/lib/utils";
 import type { ExportItem, BlurExportItem, BlurExportConfig } from "@/lib/types";
@@ -29,10 +30,11 @@ export function ExportDialog({ open, onOpenChange }: ExportDialogProps) {
   const ordered = useOrderedItems();
   const included = useProjectStore((s) => s.included);
   const identities = useIdentitiesStore((s) => s.identities);
+  const blurUntagged = useFiltersStore((s) => s.blurUntagged);
   const [dest, setDest] = useState<string | null>(null);
   const [digits, setDigits] = useState(2);
   const [busy, setBusy] = useState(false);
-  const [blurFaces, setBlurFaces] = useState(false);
+  const [blurFaces, setBlurFaces] = useState(blurUntagged);
   const [progressText, setProgressText] = useState("");
 
   const includedCount = ordered.filter(
