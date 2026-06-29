@@ -21,6 +21,7 @@ interface IdentitiesState {
   addIdentity: (name: string, embedding_b64: string, files: string[]) => void;
   removeIdentity: (name: string) => void;
   addFilesToIdentity: (name: string, files: string[]) => void;
+  removeFileFromIdentity: (name: string, filePath: string) => void;
   getIdentityColor: (name: string) => string;
 }
 
@@ -69,6 +70,18 @@ export const useIdentitiesStore = create<IdentitiesState>((set, get) => ({
           : i
       ),
     })),
+
+  removeFileFromIdentity: (name, filePath) =>
+    set((s) => {
+      const updated = s.identities
+        .map((i) =>
+          i.name === name
+            ? { ...i, files: i.files.filter((f) => f !== filePath) }
+            : i
+        )
+        .filter((i) => i.files.length > 0);
+      return { identities: updated };
+    }),
 
   getIdentityColor: (name) => {
     const found = get().identities.find((i) => i.name === name);

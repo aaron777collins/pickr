@@ -7,12 +7,16 @@ export interface FiltersState {
   hideDuplicates: boolean;
   skippedOnly: boolean;
   personFilter: string | null;
+  showFaces: boolean;
+  blurUntagged: boolean;
 
   toggleSharpOnly: () => void;
   toggleHasPeople: () => void;
   toggleHideDuplicates: () => void;
   toggleSkippedOnly: () => void;
   setPersonFilter: (name: string | null) => void;
+  toggleShowFaces: () => void;
+  toggleBlurUntagged: () => void;
   clearAll: () => void;
 }
 
@@ -24,6 +28,8 @@ export const useFiltersStore = create<FiltersState>((set) => ({
   hideDuplicates: false,
   skippedOnly: false,
   personFilter: null,
+  showFaces: false,
+  blurUntagged: false,
 
   toggleSharpOnly: () => set((s) => ({ sharpOnly: !s.sharpOnly })),
   toggleHasPeople: () => set((s) => ({ hasPeople: !s.hasPeople })),
@@ -31,6 +37,13 @@ export const useFiltersStore = create<FiltersState>((set) => ({
   toggleSkippedOnly: () => set((s) => ({ skippedOnly: !s.skippedOnly })),
   setPersonFilter: (name) =>
     set((s) => ({ personFilter: s.personFilter === name ? null : name })),
+  toggleShowFaces: () =>
+    set((s) => ({
+      showFaces: !s.showFaces,
+      blurUntagged: !s.showFaces ? s.blurUntagged : false,
+    })),
+  toggleBlurUntagged: () =>
+    set((s) => ({ blurUntagged: s.showFaces ? !s.blurUntagged : false })),
   clearAll: () =>
     set({
       sharpOnly: false,
@@ -38,6 +51,8 @@ export const useFiltersStore = create<FiltersState>((set) => ({
       hideDuplicates: false,
       skippedOnly: false,
       personFilter: null,
+      showFaces: false,
+      blurUntagged: false,
     }),
 }));
 
