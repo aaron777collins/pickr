@@ -19,6 +19,7 @@ import { useProjectStore } from "@/stores/projectStore";
 interface FaceTagModalProps {
   imagePath: string;
   previewPath?: string | null;
+  preselectedFace?: FaceBox;
   onClose: () => void;
 }
 
@@ -34,7 +35,7 @@ interface TaggedFace {
  * Workflow: detect faces -> overlay clickable boxes -> label -> find matches
  * across the manifest -> auto-apply the person filter.
  */
-export function FaceTagModal({ imagePath, previewPath, onClose }: FaceTagModalProps) {
+export function FaceTagModal({ imagePath, previewPath, preselectedFace, onClose }: FaceTagModalProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [faces, setFaces] = useState<TaggedFace[]>([]);
@@ -59,10 +60,18 @@ export function FaceTagModal({ imagePath, previewPath, onClose }: FaceTagModalPr
     setFaces([]);
     setActiveIndex(null);
 
+    if (preselectedFace) {
+      const owner = identities.find((id) => id.files.includes(imagePath));
+      setFaces([{ box: preselectedFace, name: owner?.name ?? null }]);
+      setActiveIndex(0);
+      setNameInput(owner?.name ?? "");
+      setLoading(false);
+      return;
+    }
+
     faceDetect(imagePath)
       .then((boxes) => {
         if (cancelled) return;
-        // Pre-fill names for faces already linked to this file.
         setFaces(
           boxes.map((box) => {
             const owner = identities.find((id) => id.files.includes(imagePath));
@@ -82,7 +91,7 @@ export function FaceTagModal({ imagePath, previewPath, onClose }: FaceTagModalPr
     };
     // identities intentionally excluded: detection should not re-run on tag.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imagePath]);
+  }, [imagePath, preselectedFace]);
 
   const onImgLoad = useCallback(() => {
     const el = imgRef.current;
