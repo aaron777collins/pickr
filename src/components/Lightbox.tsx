@@ -1,14 +1,22 @@
 import { useEffect, useCallback, useState } from "react";
 import { ChevronLeft, ChevronRight, X, Eye, EyeOff, ScanFace } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
+import { useFiltersStore } from "@/stores/filtersStore";
+import { useIdentitiesStore } from "@/stores/identitiesStore";
 import { useVisibleItems } from "@/lib/useOrderedItems";
 import { assetUrl, cn } from "@/lib/utils";
+import { cosineMatch } from "@/lib/faceUtils";
 import { Button } from "@/components/ui/button";
+import { FaceOverlay } from "@/components/FaceOverlay";
 import { FaceTagModal } from "@/features/face-tag/FaceTagModal";
 
 export function Lightbox() {
   const items = useVisibleItems();
   const [tagging, setTagging] = useState(false);
+  const [activeFaceIndex, setActiveFaceIndex] = useState<number | null>(null);
+  const showFaces = useFiltersStore((s) => s.showFaces);
+  const identities = useIdentitiesStore((s) => s.identities);
+  const removeFileFromIdentity = useIdentitiesStore((s) => s.removeFileFromIdentity);
   const lightboxIndex = useProjectStore((s) => s.lightboxIndex);
   const setLightboxIndex = useProjectStore((s) => s.setLightboxIndex);
   const toggleInclude = useProjectStore((s) => s.toggleInclude);
@@ -66,6 +74,7 @@ export function Lightbox() {
   // Reset the tagging modal whenever the lightbox closes or the item changes.
   useEffect(() => {
     setTagging(false);
+    setActiveFaceIndex(null);
   }, [item?.path, open]);
 
   if (!open || !item) return null;
@@ -129,12 +138,76 @@ export function Lightbox() {
             className="max-h-[80vh] max-w-full rounded-md"
           />
         ) : (
-          <img
-            key={item.path}
-            src={assetUrl(item.preview_path ?? item.path)}
-            alt={item.filename}
-            className="max-h-[80vh] max-w-full object-contain"
-          />
+          <div className="relative inline-flex">
+            <img
+              key={item.path}
+              src={assetUrl(item.preview_path ?? item.path)}
+              alt={item.filename}
+              className="max-h-[80vh] max-w-full"
+            />
+            {showFaces && item.faces.length > 0 && (
+              <FaceOverlay
+                faces={item.faces}
+                imageW={item.w}
+                imageH={item.h}
+                onFaceClick={(i) =>
+                  setActiveFaceIndex(activeFaceIndex === i ? null : i)
+                }
+              />
+            )}
+            {activeFaceIndex !== null && showFaces && item.faces[activeFaceIndex] && (() => {
+              const face = item.faces[activeFaceIndex];
+              const match = identities.find((id) =>
+                cosineMatch(face.embedding_b64, id.embedding_b64)
+              );
+              const left = (face.x / item.w) * 100;
+              const top = ((face.y + face.h) / item.h) * 100;
+              return (
+                <div
+                  className="absolute z-20 rounded-lg border bg-popover p-2 shadow-lg"
+                  style={{
+                    left: `${left}%`,
+                    top: `${top}%`,
+                    minWidth: 140,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {match ? (
+                    <div className="flex flex-col gap-1.5">
+                      <span className="flex items-center gap-1.5 text-xs font-medium">
+                        <span
+                          className="size-2.5 rounded-full"
+                          style={{ backgroundColor: match.color }}
+                        />
+                        {match.name}
+                      </span>
+                      <button
+                        type="button"
+                        className="rounded px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                          removeFileFromIdentity(match.name, item.path);
+                          setActiveFaceIndex(null);
+                        }}
+                      >
+                        Untag
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="rounded px-2 py-1 text-xs hover:bg-accent"
+                      onClick={() => {
+                        setTagging(true);
+                        setActiveFaceIndex(null);
+                      }}
+                    >
+                      Tag this face…
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
         )}
       </div>
 
@@ -191,6 +264,11 @@ export function Lightbox() {
           <FaceTagModal
             imagePath={item.path}
             previewPath={item.preview_path}
+            preselectedFace={
+              activeFaceIndex !== null && item.faces[activeFaceIndex]
+                ? item.faces[activeFaceIndex]
+                : undefined
+            }
             onClose={() => setTagging(false)}
           />
         </div>
