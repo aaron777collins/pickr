@@ -25,6 +25,8 @@ pub struct ManifestItem {
     pub thumb_path: Option<String>,
     pub dup_group: Option<u32>,
     pub preview_path: Option<String>,
+    #[serde(default)]
+    pub faces: Vec<FaceBox>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -345,8 +347,6 @@ pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, String> {
 struct ScanResultItem {
     #[serde(flatten)]
     base: ManifestItem,
-    #[serde(default)]
-    faces: Vec<serde_json::Value>,
 }
 
 #[tauri::command]

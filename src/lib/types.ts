@@ -11,6 +11,7 @@ export interface ManifestItem {
   thumb_path: string | null;
   dup_group: number | null;
   preview_path: string | null;
+  faces: FaceBox[];
 }
 
 export interface FaceBox {
