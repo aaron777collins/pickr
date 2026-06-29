@@ -1,7 +1,7 @@
 """Face blurring: detect faces and blur those not matching identified people.
 
-Uses face_recognition for detection+encoding. Falls back gracefully when
-face_recognition is unavailable (returns image unchanged).
+Uses OpenCV's YuNet + SFace for detection+encoding. Falls back gracefully when
+the models are unavailable (returns image unchanged).
 """
 
 from __future__ import annotations
@@ -70,11 +70,11 @@ def blur_non_matching_faces(
         threshold: Cosine similarity threshold for matching.
 
     Returns:
-        New image with non-matching faces blurred. If face_recognition is
+        New image with non-matching faces blurred. If face detection is
         unavailable or no faces are found, returns the original unchanged.
     """
     if not FACES_AVAILABLE:
-        logger.warning("face_recognition unavailable; skipping blur")
+        logger.warning("Face detection unavailable; skipping blur")
         return image
 
     faces = detect_faces(image)
@@ -101,43 +101,36 @@ def blur_frame_array(
 ) -> np.ndarray:
     """Blur non-matching faces in a raw video frame (numpy array, RGB).
 
-    Uses downscaled detection for speed, then blurs on the full-res frame.
+    Uses downscaled detection for speed, then maps boxes back to full-res.
     """
     if not FACES_AVAILABLE:
         return frame
-
-    import face_recognition
 
     h, w = frame.shape[:2]
     small_h, small_w = max(1, int(h * detection_scale)), max(1, int(w * detection_scale))
     small = cv2.resize(frame, (small_w, small_h))
 
-    locations = face_recognition.face_locations(small)
-    if not locations:
+    small_pil = Image.fromarray(small)
+    faces = detect_faces(small_pil)
+    if not faces:
         return frame
 
     scale_inv = 1.0 / detection_scale
-    full_locations = [
-        (int(top * scale_inv), int(right * scale_inv),
-         int(bottom * scale_inv), int(left * scale_inv))
-        for top, right, bottom, left in locations
-    ]
-
-    encodings = face_recognition.face_encodings(frame, full_locations)
     decoded_keep = [decode_embedding(e) for e in keep_embeddings]
 
     result = frame.copy()
-    for (top, right, bottom, left), enc in zip(full_locations, encodings):
-        matched = False
-        for keep in decoded_keep:
-            if cosine_similarity(enc, keep) > threshold:
-                matched = True
-                break
-        if matched:
+    for face in faces:
+        emb = face.get("embedding_b64")
+        if emb and _face_matches_any(emb, decoded_keep, threshold):
             continue
 
-        y1, y2 = max(0, top), min(h, bottom)
-        x1, x2 = max(0, left), min(w, right)
+        fx = int(face["x"] * scale_inv)
+        fy = int(face["y"] * scale_inv)
+        fw = int(face["w"] * scale_inv)
+        fh = int(face["h"] * scale_inv)
+
+        y1, y2 = max(0, fy), min(h, fy + fh)
+        x1, x2 = max(0, fx), min(w, fx + fw)
         if y2 > y1 and x2 > x1:
             roi = result[y1:y2, x1:x2]
             ksize = BLUR_RADIUS if BLUR_RADIUS % 2 == 1 else BLUR_RADIUS + 1

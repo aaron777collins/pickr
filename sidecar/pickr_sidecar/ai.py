@@ -6,8 +6,6 @@ are cheap to unit-test.
 
 from __future__ import annotations
 
-import functools
-
 import cv2
 import imagehash
 import numpy as np
@@ -60,22 +58,25 @@ def hamming_distance(hex_a: str, hex_b: str) -> int:
     return phash_from_hex(hex_a) - phash_from_hex(hex_b)
 
 
-@functools.lru_cache(maxsize=1)
-def _face_cascade() -> "cv2.CascadeClassifier | None":
-    path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    cascade = cv2.CascadeClassifier(path)
-    if cascade.empty():
-        logger.warning("Haar cascade failed to load from %s; face_count will be 0", path)
-        return None
-    return cascade
-
-
 def count_faces(image: Image.Image) -> int:
-    """Count faces with an OpenCV Haar cascade. Returns 0 on any failure."""
-    cascade = _face_cascade()
-    if cascade is None:
-        return 0
+    """Count faces using the same YuNet detector as recognize.detect_faces.
+
+    Falls back to the Haar cascade if the ONNX model can't be loaded (e.g. no
+    network on first run). Returns 0 on any failure.
+    """
     try:
+        from .recognize import detect_faces, FACES_AVAILABLE
+
+        if FACES_AVAILABLE:
+            return len(detect_faces(image))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("YuNet face count failed, falling back to Haar: %s", exc)
+
+    try:
+        path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        cascade = cv2.CascadeClassifier(path)
+        if cascade.empty():
+            return 0
         gray = _to_gray(image)
         faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
         return int(len(faces))

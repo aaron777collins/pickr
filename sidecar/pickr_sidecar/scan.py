@@ -14,7 +14,7 @@ from . import ai, thumbs
 from .protocol import emit_progress, emit_result, logger
 from .recognize import FACES_AVAILABLE, detect_faces
 
-_CACHE_VERSION = 2
+_CACHE_VERSION = 3
 
 
 def _cache_path(folder: str) -> str:
@@ -112,9 +112,7 @@ def analyze_file(folder: str, filename: str) -> dict | None:
         logger.warning("Face count failed for %s: %s", filename, exc)
         face_count = 0
 
-    # When face_recognition is available, also store embeddings so a later
-    # face_match command can compare against this item. Falls back to the Haar
-    # count above when it is not.
+    # Store full face data (embeddings) for face_match.
     faces: list[dict] = []
     if FACES_AVAILABLE:
         faces = detect_faces(analysis_img)
@@ -161,7 +159,7 @@ def scan_folder(folder: str) -> list[dict]:
         raise NotADirectoryError(folder)
 
     if not FACES_AVAILABLE:
-        logger.info("face_recognition disabled; face embeddings will be empty")
+        logger.info("Face detection unavailable; face embeddings will be empty")
 
     names = _list_media(folder)
     total = len(names)

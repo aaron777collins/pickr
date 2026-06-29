@@ -66,7 +66,7 @@ pickr/
       scan.py                  # scan_folder → manifest (mtime cache)
       thumbs.py                # HEIC decode, video frames, thumbnails
       ai.py                    # sharpness, pHash, Haar face count
-      recognize.py             # face_recognition wrapper (optional dlib)
+      recognize.py             # face detection/recognition (OpenCV YuNet + SFace)
       dedup.py                 # pHash union-find grouping
     tests/                     # pytest (test_ai, test_scan)
     pyproject.toml
@@ -115,9 +115,9 @@ thumbnails into `<folder>/.pickr/thumbs/` and caches results by source mtime in
 }
 ```
 
-`faces` is populated only when `face_recognition` is installed; otherwise it is
-`[]` and `face_count` comes from an OpenCV Haar cascade. Videos use a frame at
-40% of duration for analysis and thumbnailing. Face coordinates are absolute pixels.
+`faces` is populated by OpenCV's YuNet face detector + SFace recognizer (ONNX
+models auto-downloaded on first use). Videos use a frame at 40% of duration for
+analysis and thumbnailing. Face coordinates are absolute pixels.
 
 **`dedup <manifest_json_path>`** — Reads a manifest JSON (a bare array, or
 `{"data":[...]}`), groups items whose pHashes are within Hamming distance ≤ 8,
@@ -126,8 +126,8 @@ and adds `dup_group` (int) to each member. Items with no near duplicate get
 
 **`face_detect <image_or_video_path>`** — Detects faces in an image (or a
 video's representative frame). Emits
-`{"type":"result","data":[{"x","y","w","h","embedding_b64"}]}`. Empty array if
-`face_recognition` is unavailable. Embeddings are base64 of a 128-d float64 vector.
+`{"type":"result","data":[{"x","y","w","h","embedding_b64"}]}`. Embeddings are
+base64 of a 128-d float64 vector.
 
 **`face_match <embedding_b64> <manifest_json_path>`** — Compares the embedding
 against every manifest item's `faces[].embedding_b64`; emits
@@ -136,8 +136,8 @@ similarity exceeds 0.6.
 
 ### Degradation
 
-`face_recognition` (dlib) is an optional extra. When absent, `scan` still runs,
-`face_detect`/`face_match` return empty, and `face_count` falls back to Haar.
+Face detection requires OpenCV 4.8+ (a core dependency). ONNX models for YuNet
+and SFace are auto-downloaded to the platform cache on first use (~37 MB total).
 Missing ffmpeg disables video thumbnails (logged to stderr, file still listed).
 Unreadable/corrupt files are logged to stderr and skipped without failing the scan.
 

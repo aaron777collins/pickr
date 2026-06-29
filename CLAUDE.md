@@ -37,7 +37,7 @@ pickr-sidecar face_match <emb> <manifest.json>  # find matching faces
 - Output: newline-delimited JSON on stdout (type: progress/result/error)
 - Logs go to stderr only
 - Sidecar binary found by: $PICKR_SIDECAR_PATH > PATH > sidecar/.venv/bin/pickr-sidecar
-- face_recognition requires dlib (cmake + build-essential); degrades gracefully if absent
+- Face detection uses OpenCV's YuNet + SFace (ONNX models, auto-downloaded on first use)
 
 ## Key Decisions
 - Path alias: `@/` maps to `src/`
