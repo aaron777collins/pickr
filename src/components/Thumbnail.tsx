@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import type { ManifestItem } from "@/lib/types";
 import { useProjectStore } from "@/stores/projectStore";
+import { useFiltersStore } from "@/stores/filtersStore";
 import { assetUrl, cn } from "@/lib/utils";
+import { FaceOverlay } from "@/components/FaceOverlay";
 import { getDupGroupInfo } from "@/features/filters/dupHelpers";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,6 +39,7 @@ export function Thumbnail({ item, index }: ThumbnailProps) {
   const toggleInclude = useProjectStore((s) => s.toggleInclude);
   const setLightboxIndex = useProjectStore((s) => s.setLightboxIndex);
   const allItems = useProjectStore((s) => s.items);
+  const showFaces = useFiltersStore((s) => s.showFaces);
 
   const dup = getDupGroupInfo(item, allItems);
 
@@ -91,6 +94,14 @@ export function Thumbnail({ item, index }: ThumbnailProps) {
           <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
             <ImageIcon className="h-8 w-8" />
           </div>
+        )}
+
+        {showFaces && item.faces.length > 0 && (
+          <FaceOverlay
+            faces={item.faces}
+            imageW={item.w}
+            imageH={item.h}
+          />
         )}
 
         {item.kind === "video" && (
